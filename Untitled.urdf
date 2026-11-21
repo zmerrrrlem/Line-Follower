@@ -1,0 +1,246 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!--
+  Line follower robot.
+
+  Dimensions measured from the STL meshes (base_link frame):
+    wheel axle at x = 0.0659, wheel radius = 0.0105 m, wheel width = 0.0333 m,
+    wheel separation (centre to centre) = 0.140 m,
+    ground level = z -0.00772 (bottom of the wheels).
+    Body mesh spans x -0.0986 .. +0.1064 (wheels are 40 mm from the +x end,
+    164 mm from the -x end).
+
+  Wheel direction:
+    Both wheel joints are set up so that a POSITIVE velocity drives the robot
+    toward +x. If the robot's front is the -x end, flip the axis of both wheel joints.
+
+  Casters:
+    Two ball casters (caster_pos_x / caster_neg_x) sit under the two ends of the board,
+    on its centre line (y = -0.0129), so the robot rests on 4 points.
+-->
+<robot name="Untitled">
+
+    <!-- ===================== COLOURS ===================== -->
+    <material name="c_arm">          <color rgba="1 0.42 0.42 1" /></material>  <!-- sensor bar + truss arm -->
+    <material name="c_pcb">          <color rgba="1 0.42 0.42 1" /></material>  <!-- main yellow board -->
+    <material name="c_motors">       <color rgba="0.92 0.30 0.34 1" /></material>
+    <material name="c_battery">      <color rgba="0.12 0.45 0.90 1" /></material>
+    <material name="c_fan_housing">  <color rgba="0.30 0.50 0.95 0.6" /></material>  <!-- translucent blue -->
+    <material name="c_fan_impeller"> <color rgba="0.85 0.10 0.10 1" /></material>
+    <material name="c_fan_base">     <color rgba="0.85 0.12 0.12 1" /></material>
+    <material name="c_nano_board">   <color rgba="0.80 0.84 0.90 1" /></material>
+    <material name="c_black">        <color rgba="0.10 0.10 0.10 1" /></material>
+    <material name="c_gold">         <color rgba="0.85 0.65 0.13 1" /></material>
+    <material name="c_silver">       <color rgba="0.72 0.73 0.76 1" /></material>
+
+    <!-- ===================== BASE ===================== -->
+    <link name="base_link">
+        <inertial>
+            <origin xyz="0.0497100684 -0.0129209646 0.00202155445" rpy="0 0 0" />
+            <mass value="0.0466385593" />
+            <inertia ixx="2.70721052e-05" iyy="1.46734543e-04" izz="1.71141810e-04"
+                     ixy="-1.06437045e-06" iyz="-6.15719036e-08" ixz="-4.31754903e-06" />
+        </inertial>
+        <!-- The body mesh was split into one STL per colour (meshes/base_<part>.stl).
+             All parts share the original mesh frame, so they use the same origin
+             and together are identical to the old meshes/base_link.stl. -->
+        <visual name="base_arm_visual">
+            <origin xyz="0.0407051062 -0.0161456168 -0.00761921847" rpy="0 0 0" />
+            <geometry><mesh filename="meshes/base_arm.stl" scale="0.001 0.001 0.001" /></geometry>
+            <material name="c_arm" />
+        </visual>
+        <visual name="base_pcb_visual">
+            <origin xyz="0.0407051062 -0.0161456168 -0.00761921847" rpy="0 0 0" />
+            <geometry><mesh filename="meshes/base_pcb.stl" scale="0.001 0.001 0.001" /></geometry>
+            <material name="c_pcb" />
+        </visual>
+        <visual name="base_motors_visual">
+            <origin xyz="0.0407051062 -0.0161456168 -0.00761921847" rpy="0 0 0" />
+            <geometry><mesh filename="meshes/base_motors.stl" scale="0.001 0.001 0.001" /></geometry>
+            <material name="c_motors" />
+        </visual>
+        <visual name="base_battery_visual">
+            <origin xyz="0.0407051062 -0.0161456168 -0.00761921847" rpy="0 0 0" />
+            <geometry><mesh filename="meshes/base_battery.stl" scale="0.001 0.001 0.001" /></geometry>
+            <material name="c_battery" />
+        </visual>
+        <visual name="base_fan_housing_visual">
+            <origin xyz="0.0407051062 -0.0161456168 -0.00761921847" rpy="0 0 0" />
+            <geometry><mesh filename="meshes/base_fan_housing.stl" scale="0.001 0.001 0.001" /></geometry>
+            <material name="c_fan_housing" />
+        </visual>
+        <visual name="base_fan_impeller_visual">
+            <origin xyz="0.0407051062 -0.0161456168 -0.00761921847" rpy="0 0 0" />
+            <geometry><mesh filename="meshes/base_fan_impeller.stl" scale="0.001 0.001 0.001" /></geometry>
+            <material name="c_fan_impeller" />
+        </visual>
+        <visual name="base_fan_base_visual">
+            <origin xyz="0.0407051062 -0.0161456168 -0.00761921847" rpy="0 0 0" />
+            <geometry><mesh filename="meshes/base_fan_base.stl" scale="0.001 0.001 0.001" /></geometry>
+            <material name="c_fan_base" />
+        </visual>
+        <visual name="base_nano_board_visual">
+            <origin xyz="0.0407051062 -0.0161456168 -0.00761921847" rpy="0 0 0" />
+            <geometry><mesh filename="meshes/base_nano_board.stl" scale="0.001 0.001 0.001" /></geometry>
+            <material name="c_nano_board" />
+        </visual>
+        <visual name="base_black_visual">
+            <origin xyz="0.0407051062 -0.0161456168 -0.00761921847" rpy="0 0 0" />
+            <geometry><mesh filename="meshes/base_black.stl" scale="0.001 0.001 0.001" /></geometry>
+            <material name="c_black" />
+        </visual>
+        <visual name="base_gold_visual">
+            <origin xyz="0.0407051062 -0.0161456168 -0.00761921847" rpy="0 0 0" />
+            <geometry><mesh filename="meshes/base_gold.stl" scale="0.001 0.001 0.001" /></geometry>
+            <material name="c_gold" />
+        </visual>
+        <visual name="base_silver_visual">
+            <origin xyz="0.0407051062 -0.0161456168 -0.00761921847" rpy="0 0 0" />
+            <geometry><mesh filename="meshes/base_silver.stl" scale="0.001 0.001 0.001" /></geometry>
+            <material name="c_silver" />
+        </visual>
+
+        <!-- The body mesh is NOT used for collision: its underside sits at the same
+             height as the bottom of the wheels, so it would drag on the ground.
+             Two small ball casters replace it as the 3rd/4th support points. -->
+        <collision name="caster_neg_x_collision">
+            <origin xyz="-0.09 -0.0129 -0.0046" rpy="0 0 0" />
+            <geometry>
+                <sphere radius="0.003" />
+            </geometry>
+        </collision>
+        <collision name="caster_pos_x_collision">
+            <origin xyz="0.095 -0.0129 -0.0046" rpy="0 0 0" />
+            <geometry>
+                <sphere radius="0.003" />
+            </geometry>
+        </collision>
+        <visual name="caster_neg_x_visual">
+            <origin xyz="-0.09 -0.0129 -0.0046" rpy="0 0 0" />
+            <geometry>
+                <sphere radius="0.003" />
+            </geometry>
+            <material name="caster_material">
+                <color rgba="0.7 0.7 0.7 1" />
+            </material>
+        </visual>
+        <visual name="caster_pos_x_visual">
+            <origin xyz="0.095 -0.0129 -0.0046" rpy="0 0 0" />
+            <geometry>
+                <sphere radius="0.003" />
+            </geometry>
+            <material name="caster_material">
+                <color rgba="0.7 0.7 0.7 1" />
+            </material>
+        </visual>
+    </link>
+
+    <!-- ===================== RIGHT WHEEL ===================== -->
+    <link name="right_wheel_1">
+        <inertial>
+            <origin xyz="-1.1737347e-07 -9.4239375e-09 0.0179253936" rpy="0 0 0" />
+            <mass value="0.0106464006" />
+            <inertia ixx="1.13505775e-06" iyy="1.13505656e-06" izz="5.89875705e-07"
+                     ixy="1.1605346e-13" iyz="-1.7808156e-12" ixz="-1.8415707e-11" />
+        </inertial>
+        <visual name="right_wheel_1_visual">
+            <origin xyz="0.0251530744 -0.0103999985 -0.0612858878" rpy="1.5707963268 -0.000674994428 3.14159265359" />
+            <geometry>
+                <mesh filename="meshes/right_wheel_1.stl" scale="0.001 0.001 0.001" />
+            </geometry>
+            <material name="wheel_material">
+                <color rgba="0.08 0.08 0.08 1" />
+            </material>
+        </visual>
+        <collision name="right_wheel_1_collision">
+            <origin xyz="0.0251530744 -0.0103999985 -0.0612858878" rpy="1.5707963268 -0.000674994428 3.14159265359" />
+            <geometry>
+                <mesh filename="meshes/right_wheel_1.stl" scale="0.001 0.001 0.001" />
+            </geometry>
+        </collision>
+    </link>
+
+    <!-- ===================== LEFT WHEEL ===================== -->
+    <link name="left_wheel_1">
+        <inertial>
+            <origin xyz="-1.15095803e-07 -1.24765479e-08 0.0179253894" rpy="0 0 0" />
+            <mass value="0.0106464006" />
+            <inertia ixx="1.13505775e-06" iyy="1.13505656e-06" izz="5.89875705e-07"
+                     ixy="1.1605346e-13" iyz="-1.7808156e-12" ixz="-1.8415707e-11" />
+        </inertial>
+        <visual name="left_wheel_1_visual">
+            <origin xyz="0.0251530767 0.0103999985 -0.0548591165" rpy="-1.5707963268 0.000674994428 3.14159265359" />
+            <geometry>
+                <mesh filename="meshes/left_wheel_1.stl" scale="0.001 0.001 0.001" />
+            </geometry>
+            <material name="wheel_material">
+                <color rgba="0.08 0.08 0.08 1" />
+            </material>
+        </visual>
+        <collision name="left_wheel_1_collision">
+            <origin xyz="0.0251530767 0.0103999985 -0.0548591165" rpy="-1.5707963268 0.000674994428 3.14159265359" />
+            <geometry>
+                <mesh filename="meshes/left_wheel_1.stl" scale="0.001 0.001 0.001" />
+            </geometry>
+        </collision>
+    </link>
+
+    <!-- ===================== JOINTS ===================== -->
+    <!-- Right wheel: child +z points to +y of base_link -> positive rotation = forward -->
+    <joint name="right_wheel_joint" type="continuous">
+        <origin xyz="0.06589637 0.04042328 0.00278078" rpy="1.5707963268 0 3.14091765916" />
+        <parent link="base_link" />
+        <child link="right_wheel_1" />
+        <axis xyz="0 0 1" />
+        <dynamics damping="0.0005" friction="0.0" />
+    </joint>
+
+    <!-- Left wheel: child +z points to -y of base_link, so the axis is flipped
+         to make positive rotation = forward as well -->
+    <joint name="left_wheel_joint" type="continuous">
+        <origin xyz="0.06582432 -0.0663217 0.00278078" rpy="-1.5707963268 0 3.14091765916" />
+        <parent link="base_link" />
+        <child link="left_wheel_1" />
+        <axis xyz="0 0 -1" />
+        <dynamics damping="0.0005" friction="0.0" />
+    </joint>
+
+    <!-- ===================== GAZEBO SURFACE PROPERTIES ===================== -->
+    <!-- base_link only collides through the caster balls: make them frictionless -->
+    <gazebo reference="base_link">
+        <mu1>0.0</mu1>
+        <mu2>0.0</mu2>
+    </gazebo>
+    <gazebo reference="right_wheel_1">
+        <mu1>1.0</mu1>
+        <mu2>1.0</mu2>
+    </gazebo>
+    <gazebo reference="left_wheel_1">
+        <mu1>1.0</mu1>
+        <mu2>1.0</mu2>
+    </gazebo>
+
+    <!-- ===================== GAZEBO PLUGINS ===================== -->
+    <gazebo>
+        <!-- Differential drive: listens to /cmd_vel (geometry_msgs/Twist), publishes /odom and odom->base_link TF.
+             Forward = +x of base_link (both wheel joints rotate positively toward +x). -->
+        <plugin filename="gz-sim-diff-drive-system" name="gz::sim::systems::DiffDrive">
+            <left_joint>left_wheel_joint</left_joint>
+            <right_joint>right_wheel_joint</right_joint>
+            <wheel_separation>0.140</wheel_separation>
+            <wheel_radius>0.0105</wheel_radius>
+            <max_linear_acceleration>1.0</max_linear_acceleration>
+            <max_angular_acceleration>3.0</max_angular_acceleration>
+            <topic>cmd_vel</topic>
+            <odom_topic>odom</odom_topic>
+            <tf_topic>tf</tf_topic>
+            <frame_id>odom</frame_id>
+            <child_frame_id>base_link</child_frame_id>
+            <odom_publisher_frequency>30</odom_publisher_frequency>
+        </plugin>
+
+        <!-- Publishes the wheel joint angles so robot_state_publisher can animate the wheels in TF -->
+        <plugin filename="gz-sim-joint-state-publisher-system" name="gz::sim::systems::JointStatePublisher">
+            <topic>joint_states</topic>
+        </plugin>
+    </gazebo>
+</robot>
