@@ -2,16 +2,21 @@
 <!--
   Line follower robot.
 
-  Dimensions measured from the STL meshes (base_link frame):
-    wheel axle at x = 0.0659, wheel radius = 0.0105 m, wheel width = 0.0333 m,
+  Frames:
+    base_link  = centre of the wheel axle, +x = FRONT (the sensor-bar end), +y = left, z up.
+    body_link  = the original CAD frame of the meshes. It is turned 180 degrees
+                 relative to base_link (see body_joint), which is why the meshes,
+                 wheels and casters below are written in the old CAD coordinates.
+    Everything is merged into one rigid body by Gazebo (fixed joints are lumped).
+
+  Dimensions measured from the STL meshes:
+    wheel radius = 0.0105 m, wheel width = 0.0333 m,
     wheel separation (centre to centre) = 0.140 m,
-    ground level = z -0.00772 (bottom of the wheels).
-    Body mesh spans x -0.0986 .. +0.1064 (wheels are 40 mm from the +x end,
-    164 mm from the -x end).
+    ground level = 0.0105 m below base_link (bottom of the wheels).
 
   Wheel direction:
     Both wheel joints are set up so that a POSITIVE velocity drives the robot
-    toward +x. If the robot's front is the -x end, flip the axis of both wheel joints.
+    toward the sensor bar (+x of base_link).
 
   Casters:
     Two ball casters (caster_pos_x / caster_neg_x) sit under the two ends of the board,
@@ -20,8 +25,8 @@
 <robot name="Untitled">
 
     <!-- ===================== COLOURS ===================== -->
-    <material name="c_arm">          <color rgba="1 0.42 0.42 1" /></material>  <!-- sensor bar + truss arm -->
-    <material name="c_pcb">          <color rgba="1 0.42 0.42 1" /></material>  <!-- main yellow board -->
+    <material name="c_arm">          <color rgba="0.96 0.42 0.42 1" /></material>  <!-- sensor bar + truss arm -->
+    <material name="c_pcb">          <color rgba="0.96 0.72 0.12 1" /></material>  <!-- main yellow board -->
     <material name="c_motors">       <color rgba="0.92 0.30 0.34 1" /></material>
     <material name="c_battery">      <color rgba="0.12 0.45 0.90 1" /></material>
     <material name="c_fan_housing">  <color rgba="0.30 0.50 0.95 0.6" /></material>  <!-- translucent blue -->
@@ -33,7 +38,17 @@
     <material name="c_silver">       <color rgba="0.72 0.73 0.76 1" /></material>
 
     <!-- ===================== BASE ===================== -->
-    <link name="base_link">
+    <!-- Root frame: centre of the wheel axle, +x pointing to the sensor bar -->
+    <link name="base_link" />
+
+    <!-- body_link (CAD frame) is turned 180 deg about z and moved so base_link sits at the axle centre -->
+    <joint name="body_joint" type="fixed">
+        <parent link="base_link" />
+        <child link="body_link" />
+        <origin xyz="0.06586035 -0.01294921 -0.00278078" rpy="0 0 3.14159265359" />
+    </joint>
+
+    <link name="body_link">
         <inertial>
             <origin xyz="0.0497100684 -0.0129209646 0.00202155445" rpy="0 0 0" />
             <mass value="0.0466385593" />
@@ -185,28 +200,28 @@
     </link>
 
     <!-- ===================== JOINTS ===================== -->
-    <!-- Right wheel: child +z points to +y of base_link -> positive rotation = forward -->
+    <!-- Right wheel (positions are in body_link / CAD coordinates).
+         Axis flipped so that positive rotation drives toward the sensor bar. -->
     <joint name="right_wheel_joint" type="continuous">
         <origin xyz="0.06589637 0.04042328 0.00278078" rpy="1.5707963268 0 3.14091765916" />
-        <parent link="base_link" />
+        <parent link="body_link" />
         <child link="right_wheel_1" />
-        <axis xyz="0 0 1" />
-        <dynamics damping="0.0005" friction="0.0" />
-    </joint>
-
-    <!-- Left wheel: child +z points to -y of base_link, so the axis is flipped
-         to make positive rotation = forward as well -->
-    <joint name="left_wheel_joint" type="continuous">
-        <origin xyz="0.06582432 -0.0663217 0.00278078" rpy="-1.5707963268 0 3.14091765916" />
-        <parent link="base_link" />
-        <child link="left_wheel_1" />
         <axis xyz="0 0 -1" />
         <dynamics damping="0.0005" friction="0.0" />
     </joint>
 
+    <!-- Left wheel: same, so both wheels drive toward the sensor bar for positive velocity -->
+    <joint name="left_wheel_joint" type="continuous">
+        <origin xyz="0.06582432 -0.0663217 0.00278078" rpy="-1.5707963268 0 3.14091765916" />
+        <parent link="body_link" />
+        <child link="left_wheel_1" />
+        <axis xyz="0 0 1" />
+        <dynamics damping="0.0005" friction="0.0" />
+    </joint>
+
     <!-- ===================== GAZEBO SURFACE PROPERTIES ===================== -->
-    <!-- base_link only collides through the caster balls: make them frictionless -->
-    <gazebo reference="base_link">
+    <!-- body_link only collides through the caster balls: make them frictionless -->
+    <gazebo reference="body_link">
         <mu1>0.0</mu1>
         <mu2>0.0</mu2>
     </gazebo>
@@ -219,10 +234,43 @@
         <mu2>1.0</mu2>
     </gazebo>
 
+    <!-- ===================== LINE SENSOR ARRAY ===================== -->
+    <!-- Virtual line sensor: a small camera looking straight down at the floor just
+         in front of the sensor bar. The node line_sensor_node.py reads this image
+         and turns it into an N-element reflectance array (like a QTR sensor bar).
+         Camera frame: x = down, image up = +x (front), image left = +y (robot left).
+         Footprint on the floor is ~80 mm wide, which covers the 74 mm bar. -->
+    <link name="camera_link" />
+    <joint name="camera_joint" type="fixed">
+        <parent link="base_link" />
+        <child link="camera_link" />
+        <origin xyz="0.160 0 0.0372" rpy="0 1.5707963268 0" />
+    </joint>
+
+    <gazebo reference="camera_link">
+        <sensor name="line_camera" type="camera">
+            <always_on>true</always_on>
+            <update_rate>30</update_rate>
+            <topic>line_camera/image</topic>
+            <camera>
+                <horizontal_fov>1.396</horizontal_fov>
+                <image>
+                    <width>160</width>
+                    <height>16</height>
+                    <format>R8G8B8</format>
+                </image>
+                <clip>
+                    <near>0.01</near>
+                    <far>0.5</far>
+                </clip>
+            </camera>
+        </sensor>
+    </gazebo>
+
     <!-- ===================== GAZEBO PLUGINS ===================== -->
     <gazebo>
         <!-- Differential drive: listens to /cmd_vel (geometry_msgs/Twist), publishes /odom and odom->base_link TF.
-             Forward = +x of base_link (both wheel joints rotate positively toward +x). -->
+             Forward = +x of base_link = the sensor-bar end. -->
         <plugin filename="gz-sim-diff-drive-system" name="gz::sim::systems::DiffDrive">
             <left_joint>left_wheel_joint</left_joint>
             <right_joint>right_wheel_joint</right_joint>

@@ -6,10 +6,12 @@ Expected layout (the launch file lives in Line_Follower/launch/):
 
     Line_Follower/
     ├── Untitled.urdf
-    ├── meshes/
-    │   ├── base_link.stl
-    │   ├── left_wheel_1.stl
-    │   └── right_wheel_1.stl
+    ├── turn_controller.py
+    ├── line_sensor_node.py
+    ├── meshes/            (base_*.stl, left_wheel_1.stl, right_wheel_1.stl)
+    ├── worlds/
+    │   ├── line_track.sdf
+    │   └── track.png
     └── launch/
         └── spawn_line_follower.launch.py
 
@@ -20,21 +22,26 @@ How it works:
   * The same URDF string is sent to Gazebo through the ros_gz_sim `create`
     node (Gazebo converts URDF -> SDF itself), so there is no intermediate
     .sdf file that can go stale or race with the spawn.
-  * /clock is bridged to ROS so use_sim_time works.
+  * /clock, /cmd_vel, /odom, /joint_states, /tf and the line camera image are
+    bridged between Gazebo and ROS.
+  * line_sensor_node.py turns the camera image into /line_sensors and /line_position.
 
 Usage:
     source /opt/ros/jazzy/setup.bash
     ros2 launch spawn_line_follower.launch.py
-    ros2 launch spawn_line_follower.launch.py world:=empty.sdf x:=1.0 y:=0.5
+    ros2 launch spawn_line_follower.launch.py turn_controller:=true forward_speed:=0.15
 
 Arguments:
-    world       : World file for Gazebo (default: empty.sdf). Can be a file
+    world       : World file for Gazebo (default: worlds/line_track.sdf). Can be a file
                   name Gazebo knows about or an absolute path to your own world.
-    world_name  : Name of the <world> inside that file (default: empty).
+                  NOTE: the world needs the Sensors system for the line camera.
+    world_name  : Name of the <world> inside that file (default: line_track).
                   Must match the name in the SDF, otherwise spawning fails.
     robot_name  : Name of the spawned entity (default: line_follower)
-    x, y, z     : Spawn position (default: 0 0 0.1)
-    yaw         : Spawn yaw in radians (default: 0)
+    x, y, z     : Spawn position (default: 0 -0.6 0.02, on the bottom straight of the track)
+    yaw         : Spawn yaw in radians (default: 0, sensor bar facing +x)
+    line_sensors    : start line_sensor_node.py (default: true)
+    turn_controller : start turn_controller.py, which drives the robot (default: false)
 """
 
 import os
@@ -46,6 +53,7 @@ from launch.actions import (
     DeclareLaunchArgument,
     ExecuteProcess,
     IncludeLaunchDescription,
+    SetEnvironmentVariable,
     TimerAction,
 )
 from launch.conditions import IfCondition
@@ -62,6 +70,15 @@ def generate_launch_description():
     robot_dir = os.path.dirname(launch_dir)  # Line_Follower/
     urdf_file = os.path.join(robot_dir, 'Untitled.urdf')
     controller_file = os.path.join(robot_dir, 'turn_controller.py')
+    sensor_file = os.path.join(robot_dir, 'line_sensor_node.py')
+    worlds_dir = os.path.join(robot_dir, 'worlds')
+    default_world = os.path.join(worlds_dir, 'line_track.sdf')
+
+    # Let Gazebo find the track texture (and anything else next to the world file).
+    resource_path = os.pathsep.join(
+        [p for p in [worlds_dir, robot_dir, os.environ.get('GZ_SIM_RESOURCE_PATH', '')] if p]
+    )
+    set_gz_resource_path = SetEnvironmentVariable('GZ_SIM_RESOURCE_PATH', resource_path)
 
     if not os.path.isfile(urdf_file):
         raise FileNotFoundError(f'URDF not found: {urdf_file}')
@@ -82,19 +99,21 @@ def generate_launch_description():
     # Launch arguments
     # ------------------------------------------------------------------
     args = [
-        DeclareLaunchArgument('world', default_value='empty.sdf',
+        DeclareLaunchArgument('world', default_value=default_world,
                               description='Gazebo world file (name or absolute path)'),
-        DeclareLaunchArgument('world_name', default_value='empty',
+        DeclareLaunchArgument('world_name', default_value='line_track',
                               description='Name of the <world> element inside the world file'),
         DeclareLaunchArgument('robot_name', default_value='line_follower',
                               description='Name of the spawned robot entity'),
         DeclareLaunchArgument('x', default_value='0.0', description='Spawn X position'),
-        DeclareLaunchArgument('y', default_value='0.0', description='Spawn Y position'),
+        DeclareLaunchArgument('y', default_value='-0.6', description='Spawn Y position'),
         DeclareLaunchArgument('z', default_value='0.02', description='Spawn Z position'),
         DeclareLaunchArgument('yaw', default_value='0.0', description='Spawn yaw (rad)'),
-        DeclareLaunchArgument('turn_controller', default_value='true',
+        DeclareLaunchArgument('line_sensors', default_value='true',
+                              description='Start line_sensor_node.py (/line_sensors, /line_position)'),
+        DeclareLaunchArgument('turn_controller', default_value='false',
                               description='Start turn_controller.py (it drives the robot via /cmd_vel)'),
-        DeclareLaunchArgument('forward_speed', default_value='0.0',
+        DeclareLaunchArgument('forward_speed', default_value='0.1',
                               description='Forward speed used by the turn controller (m/s)'),
     ]
 
@@ -135,6 +154,7 @@ def generate_launch_description():
             '/odom@nav_msgs/msg/Odometry[gz.msgs.Odometry',
             '/joint_states@sensor_msgs/msg/JointState[gz.msgs.Model',
             '/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V',
+            '/line_camera/image@sensor_msgs/msg/Image[gz.msgs.Image',
         ],
     )
 
@@ -178,6 +198,20 @@ def generate_launch_description():
     )
     delayed_controller = TimerAction(period=8.0, actions=[turn_controller])
 
+    # ------------------------------------------------------------------
+    # Line sensor array: camera image -> /line_sensors + /line_position
+    # Disable with:  line_sensors:=false
+    # ------------------------------------------------------------------
+    line_sensor_node = ExecuteProcess(
+        cmd=['python3', sensor_file, '--ros-args', '-p', 'use_sim_time:=true'],
+        output='screen',
+        condition=IfCondition(LaunchConfiguration('line_sensors')),
+    )
+    delayed_sensors = TimerAction(period=6.0, actions=[line_sensor_node])
+
     return LaunchDescription(
-        args + [gazebo, robot_state_publisher, clock_bridge, delayed_spawn, delayed_controller]
+        [set_gz_resource_path]
+        + args
+        + [gazebo, robot_state_publisher, clock_bridge, delayed_spawn,
+           delayed_sensors, delayed_controller]
     )
