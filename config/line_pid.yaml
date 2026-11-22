@@ -1,0 +1,33 @@
+# Parameters of line_pid.py (node name: line_pid).
+# Change at runtime with:  ros2 param set /line_pid kp 1.5
+#
+# The error is the line position divided by half_span, so it is about -1 .. +1
+# (+ = line to the robot's LEFT). The output is a turn rate in rad/s.
+# These numbers are a starting point and NOT tuned: tune kp first (ki = kd = 0),
+# then add kd to damp wobble, and only then a small ki if the robot drifts.
+
+line_pid:
+  ros__parameters:
+    use_sim_time: true
+
+    start_enabled: false      # wait for /line_follow_enable before driving
+
+    # PID gains (on the normalised error)
+    kp: 5.0
+    ki: 0.0
+    kd: 0.0
+    integral_limit: 0.5       # anti-windup: clamp of the integral term (output units)
+    d_filter: 0.3             # 0..1, smoothing of the derivative (higher = smoother, slower)
+
+    # Normalisation: half the width of the sensor bar span = (n_sensors - 1) * spacing / 2
+    half_span: 0.03325        # 8 sensors, 9.5 mm spacing
+
+    # Speed
+    base_speed: 3.0	      # m/s on a straight line
+    min_speed: 0.8            # m/s, lowest speed in a sharp curve
+    slow_gain: 0.8            # speed = base_speed * (1 - slow_gain * |error|)
+    max_angular: 2.5          # rad/s, limit of the PID output
+
+    # Line lost (no sensor sees black)
+    lost_timeout: 1.0         # s of searching before the robot stops
+    lost_turn_speed: 0.6      # rad/s, spin toward the side where the line was last seen

@@ -1,0 +1,191 @@
+RUN LINE FOLLOWER - GAZEBO SIM (ROS 2 JAZZY)
+================================================================================
+# Differential-drive line follower with a simulated 8-sensor IR array.
+# Velocity sources (manual, turn, line PID) are combined by twist_mux.
+# see TROUBLESHOOTING if something differs.
+
+PROJECT FILES
+-------------
+/home/zmerrr/Documents/Tugas_Robo/Line_Follower/
+  Untitled.urdf                      robot description (links, joints, colours, plugins, IR camera)
+  meshes/                            base_*.stl (11 colour parts), left_wheel_1.stl, right_wheel_1.stl
+  worlds/
+    line_track.sdf                   white floor + black stadium track (world name: line_track)
+    track.png                        texture of the track
+  config/
+    twist_mux.yaml                   velocity sources, priorities, timeouts
+    line_pid.yaml                    PID gains, speeds, line-lost behaviour
+  scripts/
+    line_sensor_node.py              camera image -> 8 IR readings + /line_position
+    line_pid.py                      PID line follower        -> /cmd_vel_line
+    turn_node.py                     turn by an angle         -> /cmd_vel_turn
+  launch/
+    spawn_line_follower.launch.py
+# turn_controller.py (old) and the old line_sensor_node.py in the project root are no longer used.
+
+INSTALL (once)
+--------------
+sudo apt install ros-jazzy-twist-mux
+
+EVERY NEW TERMINAL
+------------------
+source /opt/ros/jazzy/setup.bash
+cd /home/zmerrr/Documents/Tugas_Robo/Line_Follower
+
+HOW VELOCITY IS CHOSEN
+----------------------
+# Nobody publishes to /cmd_vel directly. twist_mux forwards the highest-priority source that
+# is still publishing (newer than 0.5 s), and drops a source that goes quiet.
+#   /cmd_vel_turn     turn_node.py    priority 100   (only publishes while turning)
+#   /cmd_vel_manual   you / teleop    priority  50
+#   /cmd_vel_line     line_pid.py     priority  10   (only publishes while enabled)
+#   -> twist_mux -> /cmd_vel -> diff drive
+
+COLD START (one command - recommended)
+--------------------------------------
+# Starts: Gazebo + track world, robot_state_publisher, ROS<->Gazebo bridge, twist_mux
+ros2 launch /home/zmerrr/Documents/Tugas_Robo/Line_Follower/launch/spawn_line_follower.launch.py
+
+# Other ways to start
+ros2 launch .../spawn_line_follower.launch.py line_pid:=false                 # no PID node
+ros2 launch .../spawn_line_follower.launch.py turn_node:=false                # no turn node
+ros2 launch .../spawn_line_follower.launch.py line_sensors:=false             # no sensor node
+ros2 launch .../spawn_line_follower.launch.py x:=0.0 y:=-0.6 z:=0.02 yaw:=0.0
+ros2 launch .../spawn_line_follower.launch.py world:=empty.sdf world_name:=empty   # plain world (no track, no camera)
+
+# NOTE: give the launch file with its full path (or cd into launch/), otherwise ros2 launch
+#       reads the file name as a package name and fails.
+
+# Launch arguments (defaults)
+#   world         worlds/line_track.sdf
+#   world_name    line_track          (must match <world name="..."> in the world file)
+#   robot_name    line_follower
+#   x y z yaw     0.0  -0.6  0.02  0.0   (bottom straight of the track, facing the sensor bar)
+#   line_sensors  true
+#   line_pid      true      (waits for /line_follow_enable)
+#   turn_node     true      (silent until /turn_deg)
+
+FRONT OF THE ROBOT
+------------------
+# Front = the sensor-bar end (the long truss arm). +x of base_link points there.
+# Positive linear.x drives toward the sensor bar. Left = +y. Positive angular.z turns LEFT.
+
+VERIFY
+------
+ros2 topic list                          # /cmd_vel /cmd_vel_turn /cmd_vel_line /odom /joint_states /tf /clock
+                                         # /line_camera/image /line_sensors /line_position
+ros2 topic echo /odom --once             # odometry is publishing
+ros2 topic echo /line_sensors            # 8 values: 1.0 = white floor, 0.0 = black line
+ros2 topic echo /line_position           # metres, + = line to the LEFT, - = RIGHT, nan = line lost
+ros2 topic hz /line_camera/image         # about 30 Hz
+ros2 topic echo /cmd_vel                 # what twist_mux is sending to the robot
+ros2 node list                           # should include /twist_mux /line_pid /turn_node /line_sensor_node
+
+FOLLOW THE LINE (PID)
+---------------------
+ros2 topic pub --once /line_follow_enable std_msgs/msg/Bool "{data: true}"      # start following
+ros2 topic pub --once /line_follow_enable std_msgs/msg/Bool "{data: false}"     # stop (sends one stop command)
+
+# Tune at runtime (see config/line_pid.yaml for what each one does)
+ros2 param set /line_pid kp 1.5
+ros2 param set /line_pid ki 0.0
+ros2 param set /line_pid kd 0.2
+ros2 param set /line_pid base_speed 0.12
+ros2 param set /line_pid slow_gain 0.6
+ros2 param set /line_pid lost_timeout 1.0
+# The default gains are a starting point and are NOT tuned. Tune kp first (ki = kd = 0),
+# then add kd to damp wobble, then a small ki only if the robot drifts.
+# To make the new values permanent, edit config/line_pid.yaml.
+
+DRIVE MANUALLY
+--------------
+# Manual commands go to /cmd_vel_manual (NOT /cmd_vel). Keep it publishing at 10 Hz.
+ros2 topic pub -r 10 /cmd_vel_manual geometry_msgs/msg/Twist "{linear: {x: 0.1}, angular: {z: 0.0}}"
+ros2 topic pub -r 10 /cmd_vel_manual geometry_msgs/msg/Twist "{linear: {x: 0.0}, angular: {z: 0.5}}"
+
+# Keyboard control (if installed)
+ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/cmd_vel_manual
+
+# Manual beats line following (priority 50 > 10): while you publish, the PID is overridden.
+# When you stop publishing, the PID takes over again (if it is enabled).
+
+TURN (turn_node.py)
+-------------------
+# Rotates in place by a relative angle in DEGREES (+ = left, - = right), then goes silent.
+# While it turns it overrides everything (priority 100), then control returns.
+ros2 topic pub --once /turn_deg std_msgs/msg/Float64 "{data: 90.0}"
+ros2 topic pub --once /turn_deg std_msgs/msg/Float64 "{data: -45.0}"
+# Stop any manual publisher before a turn: it still competes for the same moments.
+
+# Parameters (when started by hand: --ros-args -p name:=value)
+#   max_turn_speed 1.0 | min_turn_speed 0.15 | kp_turn 2.0 | tolerance_deg 1.0
+python3 scripts/turn_node.py --ros-args -p use_sim_time:=true
+
+LINE SENSORS (IR array, simulated)
+----------------------------------
+# A downward camera under the sensor bar is sampled at 8 points (9.5 mm apart) and
+# published like a QTR-8 reflectance bar. Sensor 0 = robot's left, sensor 7 = right.
+python3 scripts/line_sensor_node.py --ros-args -p use_sim_time:=true -p n_sensors:=8 -p spacing:=0.0095
+#   n_sensors 8 | spacing 0.0095 | window 0.004 | image_footprint 0.0801 | line_threshold 0.5
+# If you change n_sensors or spacing, also set half_span in config/line_pid.yaml:
+#   half_span = (n_sensors - 1) * spacing / 2
+
+# Image check (needs rqt_image_view)
+ros2 run rqt_image_view rqt_image_view /line_camera/image
+
+RESET ROBOT (before every run)
+------------------------------
+# Put the robot back on the bottom straight of the track, facing the sensor bar (+x)
+gz service -s /world/line_track/set_pose --reqtype gz.msgs.Pose --reptype gz.msgs.Boolean --timeout 3000 --req 'name: "line_follower", position: {x: 0, y: -0.6, z: 0.02}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}'
+# Then disable the PID until you are ready:
+ros2 topic pub --once /line_follow_enable std_msgs/msg/Bool "{data: false}"
+
+STOP DRIVING
+------------
+ros2 topic pub --once /line_follow_enable std_msgs/msg/Bool "{data: false}"     # stop the PID
+# Manual: Ctrl+C the publisher (the robot stops when /cmd_vel_manual times out and nothing else is active)
+
+KILL EVERYTHING
+---------------
+# Ctrl+C in the launch terminal. If Gazebo stays open:
+pkill -f "gz sim"
+pkill -f parameter_bridge
+pkill -f twist_mux
+
+ADD A NEW BEHAVIOUR LATER
+-------------------------
+# 1. write a node that publishes geometry_msgs/Twist to its own topic, e.g. /cmd_vel_obstacle
+# 2. add a block for it in config/twist_mux.yaml with a topic, timeout and priority
+# 3. start it from the launch file. Nothing else has to change.
+
+TROUBLESHOOTING
+---------------
+ValueError: '...launch.py' is not a valid package name
+    -> give the full path to the launch file, or cd into launch/ first.
+package 'twist_mux' not found
+    -> sudo apt install ros-jazzy-twist-mux
+FileNotFoundError: Missing file ...
+    -> scripts/ and config/ must be in Line_Follower/, one level above launch/.
+Robot does not move
+    -> ros2 topic echo /cmd_vel. If empty, nothing is winning the mux: is line following enabled?
+       ros2 topic echo /cmd_vel_manual / /cmd_vel_line to see who is publishing.
+       If /cmd_vel has data but the robot stays still, check the Gazebo bridge and that Gazebo is not paused.
+Manual command ignored
+    -> it must go to /cmd_vel_manual. A turn in progress (priority 100) also blocks it.
+Robot wobbles / oscillates on the line
+    -> lower kp or base_speed, raise kd. Tune kp first with ki = kd = 0.
+Robot leaves the line in curves
+    -> raise slow_gain (slows down in curves), lower base_speed, raise kp.
+Robot spins when it loses the line
+    -> expected for up to lost_timeout seconds, toward the side where the line was last seen.
+       Then it stops. Change lost_timeout / lost_turn_speed in config/line_pid.yaml.
+/line_position is always nan
+    -> check /line_sensors and the camera image (rqt_image_view). The track texture must load
+       (worlds/track.png next to worlds/line_track.sdf).
+Robot is white / sinks into the ground / drives backwards
+    -> see the URDF notes: <color rgba> materials, only wheels + 2 casters collide, positive velocity
+       drives toward the sensor bar.
+Spawn fails with "service not found" / wrong world
+    -> world_name must match the world file (line_track for the track, empty for empty.sdf).
+No sim time / TF warnings
+    -> nodes started by hand need: --ros-args -p use_sim_time:=true

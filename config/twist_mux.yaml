@@ -1,0 +1,25 @@
+# twist_mux: picks which velocity source drives the robot.
+# The highest-priority source that is still publishing (newer than its timeout) wins.
+# A source that goes quiet for longer than `timeout` is dropped and the next one takes over.
+#
+# Output topic is remapped to /cmd_vel in the launch file.
+#
+# To add a new behaviour: publish to its own topic and add a block below.
+
+twist_mux:
+  ros__parameters:
+    use_sim_time: true
+    use_stamped: false        # plain geometry_msgs/Twist (the Gazebo bridge expects this)
+    topics:
+      turn:                   # turn_node.py: only publishes while turning
+        topic: cmd_vel_turn
+        timeout: 0.5
+        priority: 100
+      manual:                 # teleop / ros2 topic pub
+        topic: cmd_vel_manual
+        timeout: 0.5
+        priority: 50
+      line:                   # line_pid.py
+        topic: cmd_vel_line
+        timeout: 0.5
+        priority: 10

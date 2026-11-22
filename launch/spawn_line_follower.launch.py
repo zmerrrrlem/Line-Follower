@@ -6,12 +6,17 @@ Expected layout (the launch file lives in Line_Follower/launch/):
 
     Line_Follower/
     ├── Untitled.urdf
-    ├── turn_controller.py
-    ├── line_sensor_node.py
     ├── meshes/            (base_*.stl, left_wheel_1.stl, right_wheel_1.stl)
     ├── worlds/
     │   ├── line_track.sdf
     │   └── track.png
+    ├── config/
+    │   ├── twist_mux.yaml
+    │   └── line_pid.yaml
+    ├── scripts/
+    │   ├── line_sensor_node.py
+    │   ├── line_pid.py
+    │   └── turn_node.py
     └── launch/
         └── spawn_line_follower.launch.py
 
@@ -25,11 +30,18 @@ How it works:
   * /clock, /cmd_vel, /odom, /joint_states, /tf and the line camera image are
     bridged between Gazebo and ROS.
   * line_sensor_node.py turns the camera image into /line_sensors and /line_position.
+  * Velocity sources never publish to /cmd_vel directly. twist_mux chooses one:
+        /cmd_vel_turn   (turn_node.py,   priority 100, only while turning)
+        /cmd_vel_manual (teleop,         priority  50)
+        /cmd_vel_line   (line_pid.py,    priority  10)
+    and publishes the winner on /cmd_vel (see config/twist_mux.yaml).
 
 Usage:
     source /opt/ros/jazzy/setup.bash
-    ros2 launch spawn_line_follower.launch.py
-    ros2 launch spawn_line_follower.launch.py turn_controller:=true forward_speed:=0.15
+    ros2 launch /full/path/to/spawn_line_follower.launch.py
+    ros2 launch /full/path/to/spawn_line_follower.launch.py line_pid:=false turn_node:=false
+
+Requires:  sudo apt install ros-jazzy-twist-mux
 
 Arguments:
     world       : World file for Gazebo (default: worlds/line_track.sdf). Can be a file
@@ -40,8 +52,9 @@ Arguments:
     robot_name  : Name of the spawned entity (default: line_follower)
     x, y, z     : Spawn position (default: 0 -0.6 0.02, on the bottom straight of the track)
     yaw         : Spawn yaw in radians (default: 0, sensor bar facing +x)
-    line_sensors    : start line_sensor_node.py (default: true)
-    turn_controller : start turn_controller.py, which drives the robot (default: false)
+    line_sensors    : start scripts/line_sensor_node.py (default: true)
+    line_pid        : start scripts/line_pid.py (default: true; it waits for /line_follow_enable)
+    turn_node       : start scripts/turn_node.py (default: true; it is silent until /turn_deg)
 """
 
 import os
@@ -69,8 +82,13 @@ def generate_launch_description():
     launch_dir = os.path.dirname(os.path.abspath(__file__))
     robot_dir = os.path.dirname(launch_dir)  # Line_Follower/
     urdf_file = os.path.join(robot_dir, 'Untitled.urdf')
-    controller_file = os.path.join(robot_dir, 'turn_controller.py')
-    sensor_file = os.path.join(robot_dir, 'line_sensor_node.py')
+    scripts_dir = os.path.join(robot_dir, 'scripts')
+    config_dir = os.path.join(robot_dir, 'config')
+    sensor_file = os.path.join(scripts_dir, 'line_sensor_node.py')
+    pid_file = os.path.join(scripts_dir, 'line_pid.py')
+    turn_file = os.path.join(scripts_dir, 'turn_node.py')
+    mux_config = os.path.join(config_dir, 'twist_mux.yaml')
+    pid_config = os.path.join(config_dir, 'line_pid.yaml')
     worlds_dir = os.path.join(robot_dir, 'worlds')
     default_world = os.path.join(worlds_dir, 'line_track.sdf')
 
@@ -84,6 +102,9 @@ def generate_launch_description():
         raise FileNotFoundError(f'URDF not found: {urdf_file}')
     if not os.path.isdir(os.path.join(robot_dir, 'meshes')):
         raise FileNotFoundError(f'meshes/ folder not found in: {robot_dir}')
+    for required in (sensor_file, pid_file, turn_file, mux_config, pid_config):
+        if not os.path.isfile(required):
+            raise FileNotFoundError(f'Missing file: {required}')
 
     # Read the URDF and make the mesh paths absolute.
     with open(urdf_file, 'r') as f:
@@ -111,10 +132,10 @@ def generate_launch_description():
         DeclareLaunchArgument('yaw', default_value='0.0', description='Spawn yaw (rad)'),
         DeclareLaunchArgument('line_sensors', default_value='true',
                               description='Start line_sensor_node.py (/line_sensors, /line_position)'),
-        DeclareLaunchArgument('turn_controller', default_value='false',
-                              description='Start turn_controller.py (it drives the robot via /cmd_vel)'),
-        DeclareLaunchArgument('forward_speed', default_value='0.1',
-                              description='Forward speed used by the turn controller (m/s)'),
+        DeclareLaunchArgument('line_pid', default_value='true',
+                              description='Start line_pid.py (waits for /line_follow_enable)'),
+        DeclareLaunchArgument('turn_node', default_value='true',
+                              description='Start turn_node.py (silent until /turn_deg)'),
     ]
 
     # ------------------------------------------------------------------
@@ -182,21 +203,31 @@ def generate_launch_description():
     delayed_spawn = TimerAction(period=4.0, actions=[spawn_robot])
 
     # ------------------------------------------------------------------
-    # Turn controller: drives forward and turns on demand (/turn_deg).
-    # Started after the robot has spawned and /odom is being published.
-    # Disable with:  turn_controller:=false
+    # twist_mux: /cmd_vel_turn, /cmd_vel_manual, /cmd_vel_line -> /cmd_vel
     # ------------------------------------------------------------------
-    turn_controller = ExecuteProcess(
-        cmd=[
-            'python3', controller_file,
-            '--ros-args',
-            '-p', 'use_sim_time:=true',
-            '-p', ['forward_speed:=', LaunchConfiguration('forward_speed')],
-        ],
+    twist_mux = Node(
+        package='twist_mux',
+        executable='twist_mux',
+        name='twist_mux',
         output='screen',
-        condition=IfCondition(LaunchConfiguration('turn_controller')),
+        parameters=[mux_config],
+        remappings=[('cmd_vel_out', '/cmd_vel')],
     )
-    delayed_controller = TimerAction(period=8.0, actions=[turn_controller])
+
+    # ------------------------------------------------------------------
+    # Behaviour nodes (they publish to their own topic, never to /cmd_vel)
+    # ------------------------------------------------------------------
+    turn_node = ExecuteProcess(
+        cmd=['python3', turn_file, '--ros-args', '-p', 'use_sim_time:=true'],
+        output='screen',
+        condition=IfCondition(LaunchConfiguration('turn_node')),
+    )
+    line_pid = ExecuteProcess(
+        cmd=['python3', pid_file, '--ros-args', '--params-file', pid_config],
+        output='screen',
+        condition=IfCondition(LaunchConfiguration('line_pid')),
+    )
+    delayed_behaviours = TimerAction(period=8.0, actions=[turn_node, line_pid])
 
     # ------------------------------------------------------------------
     # Line sensor array: camera image -> /line_sensors + /line_position
@@ -212,6 +243,6 @@ def generate_launch_description():
     return LaunchDescription(
         [set_gz_resource_path]
         + args
-        + [gazebo, robot_state_publisher, clock_bridge, delayed_spawn,
-           delayed_sensors, delayed_controller]
+        + [gazebo, robot_state_publisher, clock_bridge, twist_mux, delayed_spawn,
+           delayed_sensors, delayed_behaviours]
     )
