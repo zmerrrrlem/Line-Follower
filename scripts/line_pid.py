@@ -131,7 +131,7 @@ def main():
     finally:
         node.pub.publish(Twist())
         node.destroy_node()
-        rclpy.try_shutdown()
+        rclpy.shutdown() if rclpy.ok() else None
 
 
 if __name__ == '__main__':

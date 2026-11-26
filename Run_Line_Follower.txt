@@ -25,11 +25,11 @@ PROJECT FILES
 
 INSTALL (once)
 --------------
-sudo apt install ros-jazzy-twist-mux
+sudo apt install ros-humble-twist-mux
 
 EVERY NEW TERMINAL
 ------------------
-source /opt/ros/jazzy/setup.bash
+source /opt/ros/humble/setup.bash
 cd /home/zmerrr/Documents/Tugas_Robo/Line_Follower
 
 HOW VELOCITY IS CHOSEN
@@ -136,7 +136,7 @@ ros2 run rqt_image_view rqt_image_view /line_camera/image
 RESET ROBOT (before every run)
 ------------------------------
 # Put the robot back on the bottom straight of the track, facing the sensor bar (+x)
-gz service -s /world/line_track/set_pose --reqtype gz.msgs.Pose --reptype gz.msgs.Boolean --timeout 3000 --req 'name: "line_follower", position: {x: 0, y: -0.6, z: 0.02}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}'
+ign service -s /world/line_track/set_pose --reqtype ignition.msgs.Pose --reptype ignition.msgs.Boolean --timeout 3000 --req 'name: "line_follower", position: {x: 0, y: -0.6, z: 0.02}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}'
 # Then disable the PID until you are ready:
 ros2 topic pub --once /line_follow_enable std_msgs/msg/Bool "{data: false}"
 
@@ -148,7 +148,7 @@ ros2 topic pub --once /line_follow_enable std_msgs/msg/Bool "{data: false}"     
 KILL EVERYTHING
 ---------------
 # Ctrl+C in the launch terminal. If Gazebo stays open:
-pkill -f "gz sim"
+pkill -f "ign gazebo"
 pkill -f parameter_bridge
 pkill -f twist_mux
 
@@ -163,7 +163,7 @@ TROUBLESHOOTING
 ValueError: '...launch.py' is not a valid package name
     -> give the full path to the launch file, or cd into launch/ first.
 package 'twist_mux' not found
-    -> sudo apt install ros-jazzy-twist-mux
+    -> sudo apt install ros-humble-twist-mux
 FileNotFoundError: Missing file ...
     -> scripts/ and config/ must be in Line_Follower/, one level above launch/.
 Robot does not move

@@ -271,7 +271,7 @@
     <gazebo>
         <!-- Differential drive: listens to /cmd_vel (geometry_msgs/Twist), publishes /odom and odom->base_link TF.
              Forward = +x of base_link = the sensor-bar end. -->
-        <plugin filename="gz-sim-diff-drive-system" name="gz::sim::systems::DiffDrive">
+        <plugin filename="ignition-gazebo-diff-drive-system" name="ignition::gazebo::systems::DiffDrive">
             <left_joint>left_wheel_joint</left_joint>
             <right_joint>right_wheel_joint</right_joint>
             <wheel_separation>0.140</wheel_separation>
@@ -287,7 +287,7 @@
         </plugin>
 
         <!-- Publishes the wheel joint angles so robot_state_publisher can animate the wheels in TF -->
-        <plugin filename="gz-sim-joint-state-publisher-system" name="gz::sim::systems::JointStatePublisher">
+        <plugin filename="ignition-gazebo-joint-state-publisher-system" name="ignition::gazebo::systems::JointStatePublisher">
             <topic>joint_states</topic>
         </plugin>
     </gazebo>

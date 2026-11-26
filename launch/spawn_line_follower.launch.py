@@ -94,9 +94,9 @@ def generate_launch_description():
 
     # Let Gazebo find the track texture (and anything else next to the world file).
     resource_path = os.pathsep.join(
-        [p for p in [worlds_dir, robot_dir, os.environ.get('GZ_SIM_RESOURCE_PATH', '')] if p]
+        [p for p in [worlds_dir, robot_dir, os.environ.get('IGN_GAZEBO_RESOURCE_PATH', '')] if p]
     )
-    set_gz_resource_path = SetEnvironmentVariable('GZ_SIM_RESOURCE_PATH', resource_path)
+    set_gz_resource_path = SetEnvironmentVariable('IGN_GAZEBO_RESOURCE_PATH', resource_path)
 
     if not os.path.isfile(urdf_file):
         raise FileNotFoundError(f'URDF not found: {urdf_file}')
@@ -170,12 +170,12 @@ def generate_launch_description():
         name='gz_bridge',
         output='screen',
         arguments=[
-            '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
-            '/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist',
-            '/odom@nav_msgs/msg/Odometry[gz.msgs.Odometry',
-            '/joint_states@sensor_msgs/msg/JointState[gz.msgs.Model',
-            '/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V',
-            '/line_camera/image@sensor_msgs/msg/Image[gz.msgs.Image',
+            '/clock@rosgraph_msgs/msg/Clock[ignition.msgs.Clock',
+            '/cmd_vel@geometry_msgs/msg/Twist]ignition.msgs.Twist',
+            '/odom@nav_msgs/msg/Odometry[ignition.msgs.Odometry',
+            '/joint_states@sensor_msgs/msg/JointState[ignition.msgs.Model',
+            '/tf@tf2_msgs/msg/TFMessage[ignition.msgs.Pose_V',
+            '/line_camera/image@sensor_msgs/msg/Image[ignition.msgs.Image',
         ],
     )
 
